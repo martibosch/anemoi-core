@@ -7,6 +7,9 @@
 # granted to it by virtue of its status as an intergovernmental organisation
 # nor does it submit to any jurisdiction.
 
+import pytest
+from pydantic import ValidationError
+
 from anemoi.models.schemas.data_processor import ImputerSchema
 from anemoi.models.schemas.data_processor import NormalizerSchema
 from anemoi.models.schemas.data_processor import PostprocessorSchema
@@ -88,3 +91,41 @@ def test_preprocessor_with_remapper_instance():
     schema = PreprocessorSchema(_target_=PreprocessorTarget.remapper, config=instance)
     assert isinstance(schema.config, RemapperSchema)
     assert "d" in schema.config.none
+
+def test_remapper_schema_covers_every_supported_method():
+    """The schema must stay in sync with Remapper.supported_methods.
+
+    BaseModel forbids extra keys, so a method implemented but not declared here is
+    unusable from any validated config. This is the regression that let log1p/sqrt/
+    boxcox be the only reachable methods while nine were implemented.
+    """
+    from anemoi.models.preprocessing.remapper import Remapper
+
+    declared = set(RemapperSchema.model_fields)
+    literals = set(RemapperSchema.model_fields["default"].json_schema_extra["literals"])
+
+    for method in Remapper.supported_methods:
+        assert method in declared, f"{method!r} is implemented but not declared in RemapperSchema"
+        assert method in literals, f"{method!r} is not accepted as a RemapperSchema default"
+
+
+def test_remapper_schema_accepts_method_kwargs():
+    instance = RemapperSchema(default="none", asinh=["CAPE_ML"], method_kwargs={"asinh": {"c": 0.004}})
+    assert instance.asinh == ["CAPE_ML"]
+    assert instance.method_kwargs == {"asinh": {"c": 0.004}}
+
+
+def test_remapper_schema_accepts_affine_with_scale_and_shift():
+    instance = RemapperSchema(
+        default="none",
+        affine=["x"],
+        method_kwargs={"affine": {"scale": 0.004, "shift": 0.0}},
+    )
+    schema = PreprocessorSchema(_target_=PreprocessorTarget.remapper, config=instance)
+    assert isinstance(schema.config, RemapperSchema)
+    assert schema.config.method_kwargs["affine"]["scale"] == 0.004
+
+
+def test_remapper_schema_rejects_unknown_key():
+    with pytest.raises(ValidationError):
+        RemapperSchema(default="none", not_a_method=["x"])

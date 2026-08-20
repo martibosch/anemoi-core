@@ -226,10 +226,43 @@ class ConditionalNaNPostprocessorSchema(BaseModel):
 
 
 class RemapperSchema(BaseModel):
-    default: str = Field(literals=["none", "log1p", "sqrt", "boxcox"])
+    # Keep in sync with Remapper.supported_methods in
+    # anemoi/models/preprocessing/remapper.py — BaseModel forbids extra keys, so a
+    # method missing here cannot be used from a validated config at all.
+    default: str = Field(
+        literals=[
+            "none",
+            "log1p",
+            "sqrt",
+            "boxcox",
+            "atanh",
+            "asinh",
+            "power",
+            "displace_boundary_atoms",
+            "affine",
+        ],
+    )
     "Remapper default method to apply."
+    log1p: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with log1p."
+    sqrt: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with sqrt."
+    boxcox: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with a Box-Cox transform."
+    atanh: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with atanh."
+    asinh: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with asinh."
+    power: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with a power transform."
+    displace_boundary_atoms: Union[list[str], None] = Field(default_factory=list)
+    "Variables whose boundary atoms are displaced off the boundary."
+    affine: Union[list[str], None] = Field(default_factory=list)
+    "Variables to remap with an affine scale and shift."
     none: Union[list[str], None] = Field(default_factory=list)
     "Variables not to be remapped."
+    method_kwargs: Union[dict[str, dict], None] = Field(default_factory=dict)
+    "Keyword arguments per method, e.g. {asinh: {c: 0.004}}. Keyed by METHOD, not by variable."
 
 
 class PreprocessorTarget(str, Enum):
