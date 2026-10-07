@@ -239,6 +239,7 @@ class RemapperSchema(BaseModel):
             "asinh",
             "power",
             "displace_boundary_atoms",
+            "clamp_min",
             "affine",
         ],
     )
@@ -257,6 +258,8 @@ class RemapperSchema(BaseModel):
     "Variables to remap with a power transform."
     displace_boundary_atoms: Union[list[str], None] = Field(default_factory=list)
     "Variables whose boundary atoms are displaced off the boundary."
+    clamp_min: Union[list[str], None] = Field(default_factory=list)
+    "Variables with a lower nodata sentinel to clamp onto the valid range."
     affine: Union[list[str], None] = Field(default_factory=list)
     "Variables to remap with an affine scale and shift."
     none: Union[list[str], None] = Field(default_factory=list)

@@ -71,6 +71,38 @@ def inverse_displace_boundary_atoms(
 
 
 # --------------------------------------------------------
+# Clamp a lower sentinel / nodata code onto the valid range
+# --------------------------------------------------------
+def clamp_min(x, minimum=0.0):
+    """Raise everything below `minimum` up to it, in place.
+
+    Intended for fields that encode "not computed here" as an out-of-range
+    sentinel (-999, -9999, ...) rather than as NaN, which is common in NWP
+    products written with `allow_nans: False`. The imputers cannot help there:
+    they detect missingness with `torch.isnan`, so a sentinel that is a real
+    float never triggers them, silently enters the statistics, and is then
+    learned as a target.
+
+    This is deliberately NOT `displace_boundary_atoms`, whose `lower_target`
+    must sit BELOW `lower_atom`: that one pushes a boundary atom outside the
+    range so the model can treat it as an imprecise peak. Here the sentinel has
+    to be pulled INTO the range, onto the value the field physically takes
+    where it is undefined.
+
+    Not injective: every value below `minimum` maps to `minimum`, so the
+    inverse can only clamp again. That is intended -- the sentinel carries no
+    magnitude to recover.
+    """
+    return x.clamp_(min=minimum)
+
+
+def inverse_clamp_min(x, minimum=0.0):
+    """Re-apply the floor. The forward transform is lossy, so this cannot undo
+    it; it only keeps predictions inside the range the model was trained on."""
+    return x.clamp_(min=minimum)
+
+
+# --------------------------------------------------------
 # boxcox transform
 # (generalising powerlaw, linear, and log relationship)
 # --------------------------------------------------------

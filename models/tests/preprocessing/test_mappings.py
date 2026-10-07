@@ -14,11 +14,13 @@ from anemoi.models.preprocessing.mappings import affine_transform
 from anemoi.models.preprocessing.mappings import asinh_converter
 from anemoi.models.preprocessing.mappings import atanh_converter
 from anemoi.models.preprocessing.mappings import boxcox_converter
+from anemoi.models.preprocessing.mappings import clamp_min
 from anemoi.models.preprocessing.mappings import displace_boundary_atoms
 from anemoi.models.preprocessing.mappings import inverse_affine_transform
 from anemoi.models.preprocessing.mappings import inverse_asinh_converter
 from anemoi.models.preprocessing.mappings import inverse_atanh_converter
 from anemoi.models.preprocessing.mappings import inverse_boxcox_converter
+from anemoi.models.preprocessing.mappings import inverse_clamp_min
 from anemoi.models.preprocessing.mappings import inverse_displace_boundary_atoms
 from anemoi.models.preprocessing.mappings import inverse_power_transform
 from anemoi.models.preprocessing.mappings import power_transform
@@ -182,3 +184,31 @@ def test_power_roundtrip_with_clip_negative_via_kwargs() -> None:
     x_back = inverse_power_transform(y.clone(), **config)
     assert torch.isfinite(x_back).all()
     assert torch.allclose(x_back, x, atol=1e-5, rtol=1e-4)
+
+
+def test_clamp_min_raises_sentinel_onto_the_range() -> None:
+    """A nodata sentinel is pulled up to the floor; valid values are untouched."""
+    x = torch.tensor([-999.9, -0.025, 0.0, 0.006, 22.4, 5599.35], dtype=torch.float32)
+    y = clamp_min(x.clone(), minimum=0.0)
+    assert torch.allclose(y, torch.tensor([0.0, 0.0, 0.0, 0.006, 22.4, 5599.35], dtype=torch.float32))
+
+
+@pytest.mark.parametrize("minimum", [0.0, -1.0, 2.5])
+def test_clamp_min_is_idempotent(minimum: float) -> None:
+    """Applying the floor twice changes nothing after the first pass."""
+    x = torch.tensor([-1000.0, -1.0, 0.0, 3.0, 10.0], dtype=torch.float32)
+    once = clamp_min(x.clone(), minimum=minimum)
+    assert torch.allclose(clamp_min(once.clone(), minimum=minimum), once)
+
+
+def test_inverse_clamp_min_only_reapplies_the_floor() -> None:
+    """The forward map is lossy by design, so the inverse can only keep
+    predictions inside the trained range -- it cannot recover the sentinel."""
+    y = torch.tensor([-3.0, 0.0, 7.0], dtype=torch.float32)
+    assert torch.allclose(inverse_clamp_min(y.clone(), minimum=0.0),
+                          torch.tensor([0.0, 0.0, 7.0], dtype=torch.float32))
+
+
+def test_clamp_min_is_in_place_like_the_other_mappings() -> None:
+    x = torch.tensor([-999.0, 5.0], dtype=torch.float32)
+    assert clamp_min(x, minimum=0.0) is x
